@@ -1,0 +1,19 @@
+{
+  "dependencies": {
+    "axios": "^1.10.0",
+    "dotenv": "^17.1.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "node-fetch": "^2.7.0",
+    "telegraf": "^4.16.3"
+  },
+  "name": "chatai_bot",
+  "version": "1.0.0",
+  "main": "bot.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}
