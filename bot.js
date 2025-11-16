@@ -29,35 +29,65 @@ const messages = {
     }
 };
 
+// ISHONCHLI VA STABLE MODELLAR
 const modelMap = {
-    llama4: 'llama3-70b-8192',
-    llama3: 'llama3-8b-8192',
-    chatGpt: 'mixtral-8x7b-32768',
-    deepseek: 'gemma-7b-it'
+    llama4: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    llama3: 'meta-llama/llama-4-scout-17b-16e-instruct', 
+    chatGpt: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    deepseek: 'meta-llama/llama-4-scout-17b-16e-instruct'
 };
 
-async function sendToGroq(message, model = 'llama3-8b-8192') {
+async function sendToGroq(message, model = 'llama-3.1-8b-instant') {
     try {
+        console.log(`🤖 So'rov: ${message.substring(0, 50)}...`);
+        console.log(`🔧 Model: ${model}`);
+        
         const response = await axios.post(
             'https://api.groq.com/openai/v1/chat/completions',
             {
                 model: model,
                 messages: [
-                    { role: 'system', content: "Siz foydalanuvchiga yordam beradigan bot ekansiz." },
+                    { 
+                        role: 'system', 
+                        content: "Siz foydalanuvchiga yordam beradigan yaxshi bot ekansiz. Qisqa va aniq javob bering." 
+                    },
                     { role: 'user', content: message }
-                ]
+                ],
+                max_tokens: 1024,
+                temperature: 0.7
             },
             {
                 headers: {
                     "Authorization": `Bearer ${process.env.API_KEY}`,
                     "Content-Type": "application/json"
-                }
+                },
+                timeout: 30000
             }
         );
+        
+        console.log("✅ Groq API muvaffaqiyatli ishladi!");
         return response.data.choices[0].message.content.trim();
+        
     } catch (error) {
-        console.error("Groq API xatosi:", error.response?.data || error.message);
-        return "❌ Groq javobida xatolik yuz berdi.";
+        console.error("❌ Groq API xatosi:", error.response?.data || error.message);
+        
+        // Doiraviy xatoni oldini olish
+        if (error.response?.data?.error?.code === 'model_decommissioned') {
+            console.log("🔄 Model eskirgan, ishonchli modelga o'tilmoqda...");
+            // Boshqa modelga o'tish
+            const fallbackModel = 'mixtral-8x7b-32768';
+            if (model !== fallbackModel) {
+                return await sendToGroq(message, fallbackModel);
+            } else {
+                return "❌ Hozircha AI xizmati ishlamayapti. Iltimos, keyinroq urinib ko'ring.";
+            }
+        }
+        
+        if (error.response?.status === 429) {
+            return "⚠️ So'rovlar chegarasidan o'tib ketdingiz. Iltimos, bir daqiqa kutib turing.";
+        }
+        
+        return "❌ Texnik xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko'ring.";
     }
 }
 
@@ -90,21 +120,6 @@ bot.action(['uzb', 'russ', 'usa'], async (ctx) => {
     const name = ctx.from.first_name;
     userLangs.set(ctx.from.id, lang);
 
-    try {
-        const member = await ctx.telegram.getChatMember('@BoburSila', ctx.from.id);
-        if (member.status === 'left') {
-            return ctx.reply(
-                messages[lang].needJoin,
-                Markup.inlineKeyboard([
-                    [Markup.button.url(" A'zo bo'lish", 'https://t.me/BoburSila')]
-                ])
-            );
-        }
-    } catch (error) {
-        console.error("Kanal tekshirish xatosi:", error.message);
-        return ctx.reply(`❌ Kanal tekshirishda xatolik: ${error.description || error.message}`);
-    }
-
     ctx.answerCbQuery();
     ctx.reply(
         messages[lang].chooseModel(name),
@@ -130,11 +145,44 @@ bot.action(['llama4', 'llama3', 'chatGpt', 'deepseek'], (ctx) => {
 bot.on('text', async (ctx) => {
     const lang = userLangs.get(ctx.from.id) || 'uzb';
     const userMessage = ctx.message.text;
-    const userModel = userModels.get(ctx.from.id) || 'llama3-8b-8192';
+    const userModel = userModels.get(ctx.from.id) || 'llama-3.1-8b-instant';
 
+    await ctx.reply('⏳ Javob tayyorlanmoqda...');
     const javob = await sendToGroq(userMessage, userModel);
-    ctx.reply(javob);
+    await ctx.reply(javob);
 });
 
-bot.launch();
-console.log("✅ Bot ishga tushdi!");
+bot.launch().then(() => {
+    console.log("✅ Bot muvaffaqiyatli ishga tushdi!");
+}).catch(error => {
+    console.error("❌ Bot ishga tushmadi:", error);
+});
+
+// Replit uchun Express server
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.send(`
+        <html>
+            <head>
+                <title>🤖 ChatGPT Bot</title>
+                <style>
+                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                    h1 { color: #2c3e50; }
+                    .status { color: #27ae60; font-weight: bold; }
+                </style>
+            </head>
+            <body>
+                <h1>🤖 ChatGPT Bot - Bobur</h1>
+                <p class="status">✅ Bot faol holatda ishlamoqda</p>
+                <p>Telegramdan botga o'ting</p>
+            </body>
+        </html>
+    `);
+});
+
+app.listen(PORT, () => {
+    console.log(`🌐 Server ${PORT} portda ishga tushdi`);
+});
